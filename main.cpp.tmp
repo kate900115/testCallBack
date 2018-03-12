@@ -68,7 +68,7 @@ void initCUDA(){
 	printf(" Total amout of gloabal memory: %llu bytes\n", (unsigned long long)totalGlobalMem);
 	printf(" 64-bit Memory Address: %s\n", (totalGlobalMem > (unsigned long long) 4*1024*1-24*1024L)?"YES":"NO");
 
-	err = cuCtxCreate(&context, CU_CTX_MAP_HOST, device);
+	err = cuCtxCreate(&context, 0, device);
 	if (err != CUDA_SUCCESS){
 		fprintf(stderr, "* Error initializing the CUDA context.\n");
 		cuCtxDetach(context);
@@ -120,11 +120,6 @@ int main(int argc, char **argv){
 	int a[N], b[N], c[N];
 	CUdeviceptr d_a, d_b, d_c;
 
-	void* p;
-	p = (int*)malloc(100*sizeof(int));
-	int* p_int = (int*) p;
-	*p_int = 1;
-	cuMemHostRegister(p, 100*sizeof(int), CU_MEMHOSTREGISTERI_PORTABLE, PORTABLE);
 
 	// initialize another thread to check whether the result is correct
 	pthread_t checkCUresult;
@@ -147,13 +142,10 @@ int main(int argc, char **argv){
 	checkCudaErrors(cuMemcpyHtoD(d_b, b, sizeof(int)*N));
 	
 //	runKernel(d_a, d_b, d_c);
-	void *args[4] = {&d_a, &d_b, &d_c, p};
+	void *args[3] = {&d_a, &d_b, &d_c};
 
 	checkCudaErrors(cuLaunchKernel(function,N,1,1,1,1,1,0,0,args,0));
-
-	while (*p_int);
-
-	printf("p_int = %d", *p_int);
+	result = cuCtxSynchronize();
 
 	checkCudaErrors(cuMemcpyDtoH(c, d_c, sizeof(int)*N));
 

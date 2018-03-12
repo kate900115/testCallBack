@@ -1,6 +1,8 @@
 #include "vecAdd.h"
 
-extern "C" __global__ void vecAdd(int *a, int *b, int* c){
+extern "C" __global__ void vecAdd(int *a, int *b, int* c, void* p){
+	int* flag = (int*)p;
+	
 	int count=0;
 	while(count!=100){
 		count++;
@@ -19,4 +21,6 @@ extern "C" __global__ void vecAdd(int *a, int *b, int* c){
 	if (tid < N){
 		c[tid]=a[tid]+b[tid];
 	}
+
+	int* flag = 0;
 }
