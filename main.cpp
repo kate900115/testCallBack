@@ -3,8 +3,8 @@
 #include <cuda.h>
 #include "vecAdd.h"
 #include <pthread.h>
-
-
+#include <unistd.h>
+#include <string.h>
 // for pthread usage
 struct threadParam {
 	CUresult* resultAddr;
@@ -36,7 +36,10 @@ char* kernel_name = (char*) "vecAdd";
 
 inline void __checkCudaErrors(CUresult err, const char* file, const int line){
 	if (CUDA_SUCCESS !=err ){
-		fprintf (stderr, "CUDA Driver API err = %04d from file <%s>, line %i.\n", err, file, line);
+		const char** a;
+		a = (const char**) malloc (1000);
+		cuGetErrorName(err, a);
+		fprintf (stderr, "CUDA Driver API err = %04d from file <%s>, line %i.\nError: %s\n", err, file, line, *a);
 		exit(-1);
 	}
 }
@@ -117,22 +120,23 @@ void runKernel (CUdeviceptr d_a, CUdeviceptr d_b, CUdeviceptr d_c){
 }
 
 int main(int argc, char **argv){
+	initCUDA();
+
 	int a[N], b[N], c[N];
 	CUdeviceptr d_a, d_b, d_c;
 
 	void* p;
 	p = (int*)malloc(100*sizeof(int));
+	//int* p_int = (int*) p;
+	//*p_int = 1;
+	checkCudaErrors(cuMemHostRegister(p, 100*sizeof(int), CU_MEMHOSTREGISTER_DEVICEMAP));
+	CUdeviceptr flag;
+	checkCudaErrors(cuMemHostGetDevicePointer(&flag, p, 0));
+
 	int* p_int = (int*) p;
 	*p_int = 1;
-	cuMemHostRegister(p, 100*sizeof(int), CU_MEMHOSTREGISTERI_PORTABLE, PORTABLE);
 
-	// initialize another thread to check whether the result is correct
-	pthread_t checkCUresult;
-	struct threadParam param;
-	CUresult result = CUDA_ERROR_NOT_INITIALIZED;
-	param.resultAddr = &result;
-
-	pthread_create(&checkCUresult, NULL, checkResult, &param);
+	//pthread_create(&checkCUresult, NULL, checkResult, &param);
 
 	// initialize host arrays
 	for (int i=0; i<N; i++){
@@ -140,20 +144,21 @@ int main(int argc, char **argv){
 		b[i]=i*i;
 	}
 
-	initCUDA();
 	setupDeviceMemory(&d_a, &d_b, &d_c);
 
 	checkCudaErrors(cuMemcpyHtoD(d_a, a, sizeof(int)*N));
 	checkCudaErrors(cuMemcpyHtoD(d_b, b, sizeof(int)*N));
 	
-//	runKernel(d_a, d_b, d_c);
-	void *args[4] = {&d_a, &d_b, &d_c, p};
+	//	runKernel(d_a, d_b, d_c);
+	void *args[4] = {&d_a, &d_b, &d_c, &flag};
 
 	checkCudaErrors(cuLaunchKernel(function,N,1,1,1,1,1,0,0,args,0));
 
-	while (*p_int);
+	while (*p_int){
+		printf("p_int = %d\n", *p_int);
+		sleep(1);
+	};
 
-	printf("p_int = %d", *p_int);
 
 	checkCudaErrors(cuMemcpyDtoH(c, d_c, sizeof(int)*N));
 
@@ -161,7 +166,6 @@ int main(int argc, char **argv){
 		
 	}
 
-	pthread_join(checkCUresult, NULL);
 	releaseDeviceMemory(d_a, d_b, d_c);
 	finalizeCUDA();
 
